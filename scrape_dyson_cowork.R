@@ -78,13 +78,19 @@ if (is.na(i_year)  && n >= 2) i_year  <- 2L
 if (is.na(i_title) && n >= 3) i_title <- 3L
 if (is.na(i_inst)  && n >= 4) i_inst  <- 4L
 
-trim_chr <- function(x) trimws(as.character(x))
+# Coerce every cell to a trimmed character string; html_table() type-converts
+# numeric-looking columns so empty cells come back as NA, which we standardise
+# to "" so the empty-row filter and placement builder behave predictably.
+to_chr <- function(x) {
+  x <- trimws(as.character(x))
+  ifelse(is.na(x), "", x)
+}
 
 df <- data.frame(
-  name        = trim_chr(raw[[i_name]]),
-  year        = trim_chr(raw[[i_year]]),
-  title       = trim_chr(raw[[i_title]]),
-  institution = trim_chr(raw[[i_inst]]),
+  name        = to_chr(raw[[i_name]]),
+  year        = to_chr(raw[[i_year]]),
+  title       = to_chr(raw[[i_title]]),
+  institution = to_chr(raw[[i_inst]]),
   stringsAsFactors = FALSE
 )
 
