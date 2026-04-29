@@ -2,9 +2,13 @@
 # Scrape the "Recent PhD Job Placements" table from the Dyson School page
 # and write a tidy CSV to data/placements_dyson.csv.
 #
-# Output columns (in order): name, year, placement, source_url
-#   - placement = "<job title> at <institution>"
+# Output columns (in order): name, year, placement, source_url, is_postdoc, country
+#   - placement  = "<job title> at <institution>"
 #   - source_url is the page URL, repeated on every row.
+#   - is_postdoc is TRUE when the job title looks like a postdoctoral role.
+#   - country    is a heuristic best guess from the institution string; rows
+#                that no pattern matches are returned as NA so they can be
+#                inspected and the lookup table extended.
 #
 # The selector is anchored on the heading text "Recent PhD Job Placements"
 # so it survives changes in CSS class names.
@@ -107,11 +111,81 @@ placement <- ifelse(
          paste(df$title, "at", df$institution)))
 )
 
+# is_postdoc: TRUE when the title contains "postdoc" / "post-doc" / "post doc"
+# / "postdoctoral", case-insensitively.
+is_postdoc <- grepl("\\bpost[-\\s]?doc(toral)?\\b", df$title,
+                    ignore.case = TRUE, perl = TRUE)
+
+# country: heuristic best guess from the institution string. Patterns are
+# evaluated in order and the first match wins; United States is intentionally
+# last because its patterns are the most permissive (state suffixes, federal
+# agencies, R1 university names). Returns NA when nothing matches so the user
+# can inspect the unmatched rows and extend the table below.
+country_patterns <- list(
+  c("International",    "World Bank|International Monetary Fund|InterAmerican Development Bank|United Nations|\\bIMF\\b|\\bIDB\\b"),
+  c("Saudi Arabia",     "Riyadh|KAPSARC|Saudi"),
+  c("South Korea",      "KDI School|\\bKorea\\b|Seoul"),
+  c("Vietnam",          "VNUHCM|Vietnam|Ho Chi Minh"),
+  c("Hong Kong",        "Hong Kong"),
+  c("Singapore",        "Nanyang|National University of Singapore|\\bNUS\\b|Singapore"),
+  c("China",            "Peking|Tsinghua|Beijing|Shanghai|Xi.an Jiaotong|Industrial and Commercial Bank of China|\\bChina\\b"),
+  c("Germany",          "Munich|Berlin|Heidelberg|Ludwig-Maximilian|\\bGermany\\b"),
+  c("Switzerland",      "\\bBern\\b|Zurich|Switzerland"),
+  c("Australia",        "Monash|University of Sydney|Melbourne|\\bAustralia\\b"),
+  c("Finland",          "Finland|Helsinki"),
+  c("Zambia",           "Zambia"),
+  c("India",            "Azim Premji|Indian Institute|\\bIIMA\\b|Krea University|Bangalore|Mumbai|\\bDelhi\\b|\\bIndia\\b"),
+  c("Canada",           "\\bCanada\\b|Alberta|University of Toronto|McGill|British Columbia"),
+  c("United Kingdom",   "United Kingdom|\\bUK\\b|\\bLondon\\b|Oxford|Cambridge, England"),
+  c("United States",    paste(
+    # Explicit US markers
+    "United States", "\\bUSA\\b", "\\bU\\.S\\.",
+    "Washington, ?D\\.?C\\.?", "USDA", "USAID", "\\bNBER\\b",
+    "National Bureau of Economic Research",
+    "U\\.S\\. Department", "U\\.S\\. Securities",
+    # US universities that show up in the table
+    "Cornell", "Stanford", "Harvard", "Yale", "Princeton", "\\bMIT\\b",
+    "\\bBrown\\b", "Notre Dame", "Rutgers", "Temple", "Fordham",
+    "Johns Hopkins", "Purdue", "Colgate", "Amherst", "Middlebury",
+    "James Madison", "Arizona State", "Ohio State", "Oregon State",
+    "Utah State", "California State", "\\bBerkeley\\b", "\\bUCLA\\b",
+    "University of California", "University of Illinois",
+    "University of Washington", "University of Delaware",
+    "University of Maryland", "University of Georgia",
+    "University of Evansville", "University of Rhode Island",
+    "St\\. Mary.s College of Maryland", "Earth Institute",
+    # US-headquartered firms / agencies
+    "Pacific Gas", "Capital One", "Citibank", "Morgan Stanley", "StoneX",
+    "Acadian", "Bates White", "Berkeley Research", "Edgeworth",
+    "Analysis Group", "Dean & Company", "ISO New England", "Volpe",
+    "Tata-Cornell", "UCLA Anderson", "South Coast Air Quality",
+    "\\bUber\\b", "Freddie Mac", "Center for Governmental Research",
+    "Holy Cross",
+    # US state-suffix patterns ", XX" where XX is a two-letter state code
+    ", (?:AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)\\b",
+    sep = "|"))
+)
+
+guess_country <- function(text) {
+  if (is.na(text) || text == "") return(NA_character_)
+  for (pair in country_patterns) {
+    if (grepl(pair[[2]], text, ignore.case = TRUE, perl = TRUE)) {
+      return(pair[[1]])
+    }
+  }
+  NA_character_
+}
+
+country <- vapply(df$institution, guess_country, character(1),
+                  USE.NAMES = FALSE)
+
 out <- data.frame(
   name       = df$name,
   year       = df$year,
   placement  = placement,
   source_url = source_url,
+  is_postdoc = is_postdoc,
+  country    = country,
   stringsAsFactors = FALSE
 )
 
