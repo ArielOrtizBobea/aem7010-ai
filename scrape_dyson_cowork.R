@@ -9,7 +9,18 @@
 # The selector is anchored on the heading text "Recent PhD Job Placements"
 # so it survives changes in CSS class names.
 #
-# Dependencies: rvest, readr.
+# Dependencies: rvest, readr. The script installs them automatically from
+# the RStudio CRAN mirror if they are not already available, so it can be
+# run from a fresh R session without prior setup.
+
+required_pkgs <- c("rvest", "readr")
+missing_pkgs  <- required_pkgs[!vapply(required_pkgs,
+                                       requireNamespace,
+                                       logical(1),
+                                       quietly = TRUE)]
+if (length(missing_pkgs)) {
+  install.packages(missing_pkgs, repos = "https://cloud.r-project.org")
+}
 
 suppressPackageStartupMessages({
   library(rvest)
